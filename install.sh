@@ -5,17 +5,8 @@
 
 set -e
 
-# Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m'
-
 INSTALL_DIR="$HOME/.local/bin"
 BINARY_NAME="quic"
-
-echo -e "${BLUE}🚀 QuicDB CLI Installer${NC}"
 
 # Get latest version from VERSION file
 get_latest_version() {
@@ -28,12 +19,12 @@ get_latest_version() {
     elif command -v wget >/dev/null 2>&1; then
         latest_version=$(wget -qO- "$version_url" 2>/dev/null | tr -d '\n\r')
     else
-        echo -e "${RED}❌ Need curl or wget${NC}" >&2
+        echo "❌ Need curl or wget" >&2
         exit 1
     fi
 
     if [ -z "$latest_version" ]; then
-        echo -e "${RED}❌ Could not determine latest version${NC}" >&2
+        echo "❌ Could not determine latest version" >&2
         exit 1
     fi
 
@@ -49,13 +40,13 @@ detect_platform() {
     case "$arch" in
         x86_64) arch="amd64" ;;
         arm64|aarch64) arch="arm64" ;;
-        *) echo -e "${RED}❌ Unsupported architecture: $arch${NC}"; exit 1 ;;
+        *) echo "❌ Unsupported architecture: $arch"; exit 1 ;;
     esac
 
     case "$os" in
         darwin) echo "darwin-$arch" ;;
         linux) echo "linux-$arch" ;;
-        *) echo -e "${RED}❌ Unsupported OS: $os${NC}"; exit 1 ;;
+        *) echo "❌ Unsupported OS: $os"; exit 1 ;;
     esac
 }
 
@@ -66,21 +57,19 @@ install_binary() {
     local binary_name="quic-${platform}"
     local download_url="https://github.com/quickr-dev/quic-cli/raw/main/bin/${binary_name}"
 
-    echo -e "${YELLOW}📥 Downloading ${binary_name} v${version}...${NC}"
-
     local temp_file="/tmp/quic-$$"
 
     if command -v curl >/dev/null 2>&1; then
-        curl -fL "$download_url" -o "$temp_file"
+        curl -fL "$download_url" -o "$temp_file" 2>/dev/null
     elif command -v wget >/dev/null 2>&1; then
-        wget -q "$download_url" -O "$temp_file"
+        wget -q "$download_url" -O "$temp_file" 2>/dev/null
     else
-        echo -e "${RED}❌ Need curl or wget${NC}"
+        echo "❌ Need curl or wget"
         exit 1
     fi
 
     if [ ! -f "$temp_file" ] || [ ! -s "$temp_file" ]; then
-        echo -e "${RED}❌ Download failed${NC}"
+        echo "❌ Download failed"
         exit 1
     fi
 
@@ -91,8 +80,6 @@ install_binary() {
 
     # Install (no sudo needed)
     mv "$temp_file" "${INSTALL_DIR}/${BINARY_NAME}"
-
-    echo -e "${GREEN}✅ Installed quic v${version} to ${INSTALL_DIR}${NC}"
 }
 
 # Main
@@ -103,27 +90,21 @@ main() {
         current_version=$(quic version 2>/dev/null | grep -o 'v[0-9]\.[0-9]\.[0-9]' | head -1 | sed 's/v//')
     fi
 
-    echo -e "${YELLOW}🔍 Finding latest version...${NC}"
     local latest_version=$(get_latest_version)
     local platform=$(detect_platform)
 
     if [ -n "$current_version" ]; then
-        echo -e "${BLUE}📋 Current: v${current_version}, Latest: v${latest_version}${NC}"
-
         if [ "$current_version" = "$latest_version" ]; then
-            echo -e "${GREEN}✅ Already on latest version v${latest_version}${NC}"
+            echo "Already on latest version v${latest_version}"
             exit 0
         fi
-    else
-        echo -e "${BLUE}📋 Installing latest version: v${latest_version}${NC}"
     fi
 
+    echo "Installing quic v${latest_version}..."
     install_binary "$latest_version" "$platform"
 
     # Add to PATH if needed
     if ! echo "$PATH" | grep -q "$INSTALL_DIR"; then
-        echo -e "${YELLOW}📝 Adding $INSTALL_DIR to PATH...${NC}"
-
         # Add to shell profile
         local shell_profile=""
         if [ -n "$ZSH_VERSION" ]; then
@@ -135,31 +116,15 @@ main() {
         fi
 
         echo "export PATH=\"\$HOME/.local/bin:\$PATH\"" >> "$shell_profile"
-        echo -e "${YELLOW}💡 Added to $shell_profile - restart your shell or run: source $shell_profile${NC}"
-
-        # Add to current session
+        
+        # Source the profile to update current session
         export PATH="$HOME/.local/bin:$PATH"
+        if [ -f "$shell_profile" ]; then
+            source "$shell_profile" 2>/dev/null || true
+        fi
     fi
 
-    # Verify
-    if command -v "$BINARY_NAME" >/dev/null 2>&1; then
-        local installed_version=$(quic version 2>/dev/null | grep -o 'v[0-9]\.[0-9]\.[0-9]' | head -1)
-        echo -e "${GREEN}🎉 Successfully installed QuicDB CLI ${installed_version}${NC}"
-    else
-        echo -e "${YELLOW}⚠️  Installation complete but quic not found in PATH${NC}"
-        echo -e "${YELLOW}💡 Try: source ~/.zshrc (or restart your shell)${NC}"
-    fi
-
-    echo ""
-    echo -e "${BLUE}📚 Usage:${NC}"
-    echo "   quic version          # Check version"
-    echo "   quic login            # Authenticate"
-    echo "   quic checkout <name>  # Create database checkout"
-    echo "   quic delete <name>    # Delete database checkout"
-    echo ""
-    echo -e "${BLUE}🔄 To update in the future:${NC}"
-    echo "   curl -sf https://raw.githubusercontent.com/quickr-dev/quic-cli/main/install.sh | bash"
-    echo "   # Or: quic update"
+    echo "Done!"
 }
 
 main "$@"
